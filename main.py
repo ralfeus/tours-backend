@@ -27,7 +27,7 @@ app.include_router(feedbacks.router, prefix="/feedback", tags=["feedbacks"])
 #     )
 
 origins = [
-    "http://localhost:3000",  # your frontend origin
+    "*",  # your frontend origin
 ]
 
 app.add_middleware(
