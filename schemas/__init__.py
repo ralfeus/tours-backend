@@ -3,7 +3,7 @@ from .user import User, UserBase, UserCreate, UserUpdate
 from .tour import Tour, TourBase, TourCreate, TourUpdate, TourStats
 from .tour_request import TourRequest, TourRequestBase, TourRequestCreate, TourRequestUpdate
 from .feedback import Feedback, FeedbackBase, FeedbackCreate, FeedbackUpdate
-from .auth import CurrentUser
+from .auth import AuthResponse, CurrentUser, LoginRequest, MessageResponse, SignupRequest
 
 # Export all schemas for easy importing
 __all__ = [
@@ -37,5 +37,9 @@ __all__ = [
     "FeedbackUpdate",
     
     # Auth schemas
-    "CurrentUser"
+    "AuthResponse",
+    "CurrentUser",
+    "LoginRequest",
+    "MessageResponse",
+    "SignupRequest"
 ]
