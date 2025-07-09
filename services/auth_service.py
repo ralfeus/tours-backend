@@ -1,75 +1,69 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
-from decouple import config
 
 from models import User, UserRole
-from schemas import CurrentUser, SignupRequest, LoginRequest
+from schemas import SignupRequest, CurrentUser
+from config import settings
 
-# Configuration
-SECRET_KEY = config("SECRET_KEY", default="your-secret-key-change-in-production")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = config("ACCESS_TOKEN_EXPIRE_MINUTES", default=30, cast=int)
-
+# Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class AuthService:
+    """Authentication service for handling user auth operations"""
+    
+    @staticmethod
+    def hash_password(password: str) -> str:
+        """Hash a password using bcrypt"""
+        return pwd_context.hash(password)
+    
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
         """Verify a password against its hash"""
         return pwd_context.verify(plain_password, hashed_password)
     
     @staticmethod
-    def hash_password(password: str) -> str:
-        """Hash a password"""
-        return pwd_context.hash(password)
-    
-    @staticmethod
-    def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
         """Create a JWT access token"""
         to_encode = data.copy()
         if expires_delta:
-            expire = datetime.now(timezone.utc) + expires_delta
+            expire = datetime.utcnow() + expires_delta
         else:
-            expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         
         to_encode.update({"exp": expire})
-        encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
         return encoded_jwt
     
     @staticmethod
     def verify_token(token: str) -> dict:
         """Verify and decode a JWT token"""
         try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            username: str = payload.get("sub")
-            if username is None:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid authentication credentials"
-                )
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
             return payload
         except JWTError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials"
+                detail="Could not validate credentials"
             )
     
     @staticmethod
     def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
         """Authenticate a user with username and password"""
         user = db.query(User).filter(User.username == username).first()
-        if not user or not user.verify_password(password):
+        if not user:
+            return None
+        if not AuthService.verify_password(password, user.hashed_password):
             return None
         return user
     
     @staticmethod
     def create_user(db: Session, user_data: SignupRequest) -> User:
         """Create a new user"""
-        # Check if username or email already exists
+        # Check if user already exists
         existing_user = db.query(User).filter(
             (User.username == user_data.username) | (User.email == user_data.email)
         ).first()
@@ -104,15 +98,22 @@ class AuthService:
     @staticmethod
     def get_current_user_from_token(db: Session, token: str) -> CurrentUser:
         """Get current user from JWT token"""
-        payload = AuthService.verify_token(token)
-        username = payload.get("sub")
+        try:
+            payload = AuthService.verify_token(token)
+            username: str = payload.get("sub")
+            if username is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Could not validate credentials"
+                )
+        except JWTError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials"
+            )
         
-        user = db.query(User).filter(
-            User.username == username, 
-            User.is_active == True
-        ).first()
-        
-        if not user:
+        user = db.query(User).filter(User.username == username).first()
+        if user is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found"

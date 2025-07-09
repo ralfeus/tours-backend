@@ -1,9 +1,9 @@
 from .base import BaseSchema, TimestampMixin
 from .user import User, UserBase, UserCreate, UserUpdate
-from .tour import Tour, TourBase, TourCreate, TourUpdate
+from .tour import Tour, TourBase, TourCreate, TourUpdate, TourStats
 from .tour_request import TourRequest, TourRequestBase, TourRequestCreate, TourRequestUpdate
 from .feedback import Feedback, FeedbackBase, FeedbackCreate, FeedbackUpdate
-from .auth import CurrentUser, LoginRequest, SignupRequest, AuthResponse, MessageResponse
+from .auth import CurrentUser
 
 # Export all schemas for easy importing
 __all__ = [
@@ -22,6 +22,7 @@ __all__ = [
     "TourBase",
     "TourCreate", 
     "TourUpdate",
+    "TourStats",
     
     # Tour Request schemas
     "TourRequest",
@@ -36,9 +37,5 @@ __all__ = [
     "FeedbackUpdate",
     
     # Auth schemas
-    "CurrentUser",
-    "LoginRequest",
-    "SignupRequest",
-    "AuthResponse",
-    "MessageResponse"
+    "CurrentUser"
 ]

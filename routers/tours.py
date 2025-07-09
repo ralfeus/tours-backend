@@ -4,8 +4,9 @@ from typing import List
 
 from database import get_db
 from models import Tour
-from schemas import Tour as TourSchema, TourCreate, TourUpdate, CurrentUser
+from schemas import Tour as TourSchema, TourCreate, TourUpdate, TourStats, CurrentUser
 from auth import require_admin
+from services.tour_service import TourService
 
 router = APIRouter()
 
@@ -69,3 +70,13 @@ async def delete_tour(
     db.delete(tour)  # Cascade will handle tour requests
     db.commit()
     return {"message": "Tour deleted successfully"}
+
+@router.get("/stats", response_model=TourStats)
+async def get_tour_stats(db: Session = Depends(get_db)):
+    """Get tour statistics - Available to anyone"""
+    return TourService.get_tour_statistics(db)
+
+@router.get("/stats/detailed")
+async def get_detailed_tour_stats(db: Session = Depends(get_db)):
+    """Get detailed tour statistics with additional metrics - Available to anyone"""
+    return TourService.get_detailed_tour_statistics(db)

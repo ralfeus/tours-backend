@@ -1,99 +1,130 @@
-"""
-Example schemas showing advanced Pydantic patterns and validation
-"""
 from pydantic import BaseModel, Field, validator, root_validator
-from typing import List, Optional
-from datetime import datetime, date
+from typing import Optional, List, Dict, Any
+from datetime import datetime
 from enum import Enum
 
-class TourStatus(str, Enum):
-    DRAFT = "draft"
-    PUBLISHED = "published"
-    ARCHIVED = "archived"
+class ExampleEnum(str, Enum):
+    OPTION_A = "option_a"
+    OPTION_B = "option_b"
+    OPTION_C = "option_c"
 
-class AdvancedTourSchema(BaseModel):
-    """Example of advanced schema with comprehensive validation"""
+class AdvancedValidationExample(BaseModel):
+    """Example showing advanced Pydantic validation patterns"""
     
-    title: str = Field(..., min_length=3, max_length=200, description="Tour title")
-    description: Optional[str] = Field(None, max_length=2000, description="Tour description")
-    location: str = Field(..., min_length=2, max_length=200, description="Tour location")
-    duration_days: int = Field(..., ge=1, le=365, description="Duration in days")
-    max_participants: int = Field(..., ge=1, le=100, description="Maximum participants")
-    price: int = Field(..., ge=0, description="Price in cents")
-    start_date: Optional[date] = Field(None, description="Tour start date")
-    end_date: Optional[date] = Field(None, description="Tour end date")
-    status: TourStatus = Field(TourStatus.DRAFT, description="Tour status")
-    tags: List[str] = Field(default_factory=list, description="Tour tags")
+    # Field with multiple validators
+    email: str = Field(..., regex=r'^[^@]+@[^@]+\.[^@]+$')
     
-    @validator('title')
-    def validate_title(cls, v):
-        if not v.strip():
-            raise ValueError('Title cannot be empty or whitespace only')
-        return v.strip().title()
+    # Conditional validation
+    age: Optional[int] = Field(None, ge=0, le=150)
+    is_adult: Optional[bool] = None
     
-    @validator('price')
-    def validate_price(cls, v):
-        if v < 0:
-            raise ValueError('Price cannot be negative')
+    # Custom validation with dependencies
+    password: str = Field(..., min_length=8)
+    confirm_password: str
+    
+    # Enum validation
+    category: ExampleEnum
+    
+    # List validation
+    tags: List[str] = Field(default_factory=list, max_items=10)
+    
+    # Dict validation
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    
+    @validator('email')
+    def validate_email_domain(cls, v):
+        """Custom email domain validation"""
+        if not v.endswith(('.com', '.org', '.net')):
+            raise ValueError('Email must end with .com, .org, or .net')
+        return v.lower()
+    
+    @validator('is_adult', always=True)
+    def validate_adult_status(cls, v, values):
+        """Conditional validation based on age"""
+        age = values.get('age')
+        if age is not None:
+            return age >= 18
         return v
-    
-    @root_validator
-    def validate_dates(cls, values):
-        start_date = values.get('start_date')
-        end_date = values.get('end_date')
-        
-        if start_date and end_date:
-            if start_date >= end_date:
-                raise ValueError('End date must be after start date')
-            
-            duration_days = values.get('duration_days')
-            if duration_days:
-                expected_duration = (end_date - start_date).days
-                if abs(expected_duration - duration_days) > 1:
-                    raise ValueError('Duration days should match the date range')
-        
-        return values
     
     @validator('tags')
     def validate_tags(cls, v):
-        # Remove duplicates and empty tags
-        return list(set(tag.strip().lower() for tag in v if tag.strip()))
+        """Validate list items"""
+        if v:
+            # Remove duplicates and empty strings
+            v = list(set(tag.strip() for tag in v if tag.strip()))
+            # Validate each tag
+            for tag in v:
+                if len(tag) < 2:
+                    raise ValueError('Each tag must be at least 2 characters long')
+        return v
+    
+    @root_validator
+    def validate_passwords_match(cls, values):
+        """Root validator for cross-field validation"""
+        password = values.get('password')
+        confirm_password = values.get('confirm_password')
+        
+        if password and confirm_password and password != confirm_password:
+            raise ValueError('Passwords do not match')
+        
+        return values
     
     class Config:
-        from_attributes = True
+        # Enable validation on assignment
+        validate_assignment = True
+        # Use enum values instead of names
+        use_enum_values = True
+        # Custom JSON encoders
+        json_encoders = {
+            datetime: lambda v: v.isoformat(),
+        }
+        # Schema example for documentation
         schema_extra = {
             "example": {
-                "title": "Amazing Paris Tour",
-                "description": "Explore the beautiful city of Paris",
-                "location": "Paris, France",
-                "duration_days": 3,
-                "max_participants": 20,
-                "price": 50000,
-                "start_date": "2024-06-01",
-                "end_date": "2024-06-04",
-                "status": "published",
-                "tags": ["culture", "history", "food"]
+                "email": "user@example.com",
+                "age": 25,
+                "password": "securepassword123",
+                "confirm_password": "securepassword123",
+                "category": "option_a",
+                "tags": ["python", "fastapi", "pydantic"],
+                "metadata": {"source": "api", "version": "1.0"}
             }
         }
 
 class PaginationSchema(BaseModel):
-    """Schema for pagination metadata"""
-    page: int = Field(1, ge=1, description="Current page number")
-    size: int = Field(10, ge=1, le=100, description="Items per page")
-    total: int = Field(0, ge=0, description="Total number of items")
-    pages: int = Field(0, ge=0, description="Total number of pages")
+    """Reusable pagination schema"""
+    page: int = Field(default=1, ge=1, description="Page number")
+    size: int = Field(default=20, ge=1, le=100, description="Items per page")
     
-    @root_validator
-    def calculate_pages(cls, values):
-        total = values.get('total', 0)
-        size = values.get('size', 10)
-        values['pages'] = (total + size - 1) // size if total > 0 else 0
-        return values
+    @property
+    def offset(self) -> int:
+        """Calculate offset for database queries"""
+        return (self.page - 1) * self.size
 
 class PaginatedResponse(BaseModel):
     """Generic paginated response schema"""
-    items: List[BaseModel]
-    pagination: PaginationSchema
+    items: List[Any]
+    total: int
+    page: int
+    size: int
+    pages: int
     
-    class Config:
-        from_attributes = True
+    @validator('pages', always=True)
+    def calculate_pages(cls, v, values):
+        """Calculate total pages"""
+        total = values.get('total', 0)
+        size = values.get('size', 20)
+        return (total + size - 1) // size if total > 0 else 0
+
+class FilterSchema(BaseModel):
+    """Base filter schema for search endpoints"""
+    search: Optional[str] = Field(None, min_length=1, max_length=100)
+    sort_by: Optional[str] = Field(None, regex=r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+    sort_order: Optional[str] = Field(default="asc", regex=r'^(asc|desc)$')
+    
+    @validator('search')
+    def validate_search(cls, v):
+        """Clean search query"""
+        if v:
+            return v.strip()
+        return v

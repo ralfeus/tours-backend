@@ -32,11 +32,7 @@ async def signup(
         # Create access token
         access_token_expires = timedelta(minutes=30)
         access_token = AuthService.create_access_token(
-            data={
-                "sub": user.username,
-                "id": user.id,
-                "role": user.role.name,
-            }, 
+            data={"sub": user.username}, 
             expires_delta=access_token_expires
         )
         
@@ -87,11 +83,7 @@ async def login(
     # Create access token
     access_token_expires = timedelta(minutes=30)
     access_token = AuthService.create_access_token(
-        data={
-            "sub": user.username,
-            "id": user.id,
-            "role": user.role.name,
-        }, 
+        data={"sub": user.username}, 
         expires_delta=access_token_expires
     )
     
